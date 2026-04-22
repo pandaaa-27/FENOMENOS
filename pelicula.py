@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Simulador UNMSM - Fenómenos I", layout="wide")
+st.set_page_config(page_title="Simulador UNMSM - Fenómenos de Transporte -Ejercicio 2B6", layout="wide")
 
 # --- PARÁMETROS DE CONTROL (SIDEBAR) ---
 with st.sidebar:
@@ -42,7 +42,7 @@ col_m1, col_m2, col_m3 = st.columns(3)
 with col_m1:
     st.metric("Flujo Másico (ṁ)", f"{m_punto:.6f} kg/s")
 with col_m2:
-    st.metric("Velocidad Máxima", f"{vz_max:.4f} m/s")
+    st.metric("Velocidad ", f"{vz:.4f} m/s")
 with col_m3:
     st.metric("Relación de Radios (a)", f"{a:.3f}")
 
