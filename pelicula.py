@@ -36,7 +36,7 @@ vz_max = np.max(vz_total)
 m_punto = (np.pi * rho**2 * g * R**4 / (8 * mu)) * (4*a**4*np.log(a) - (3*a**4 - 4*a**2 + 1))
 
 # --- 1. RESULTADOS PRINCIPALES (ARRIBA) ---
-st.title("🛡️ Solución de Flujo en Película Cilíndrica")
+st.title("🛡️ Solución de Flujo en Película Cilíndrica-Ejercicio 2B6")
 
 col_m1, col_m2, col_m3 = st.columns(3)
 with col_m1:
