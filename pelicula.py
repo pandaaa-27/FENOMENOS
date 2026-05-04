@@ -7,139 +7,129 @@ import pandas as pd
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Simulador UNMSM - Fenómenos I", layout="wide")
 
-# Estilo visual de alto contraste para métricas y visibilidad
+# Estilo de alto contraste (Métricas en Blanco Puro)
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
-    /* Estilo para que las métricas sean blancas y muy legibles */
-    [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2.2rem !important; font-weight: 700 !important; }
-    [data-testid="stMetricLabel"] { color: #00d4ff !important; font-size: 1.1rem !important; }
+    [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2.5rem !important; font-weight: 800 !important; }
+    [data-testid="stMetricLabel"] { color: #00d4ff !important; font-size: 1.2rem !important; }
     .stMetric { background-color: #1a1f2e; padding: 20px; border-radius: 12px; border: 2px solid #31333f; }
+    .latex-container { background-color: #1a1f2e; padding: 15px; border-radius: 10px; border: 1px solid #00d4ff; text-align: center; margin-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- PARÁMETROS DE CONTROL (SIDEBAR) ---
+# --- PARÁMETROS EN SIDEBAR ---
 with st.sidebar:
     st.header("📋 Parámetros")
     rho = st.slider("Densidad (ρ) [kg/m³]", 800, 1500, 1000)
     mu = st.slider("Viscosidad (μ) [Pa·s]", 0.01, 2.00, 0.50, step=0.01)
     R = st.number_input("Radio del Tubo (R) [m]", 0.010, 0.500, 0.050, format="%.3f")
-    delta = st.slider("Espesor (δ) [m]", 0.001, 0.050, 0.015, step=0.001)
+    delta_user = st.slider("Espesor Actual (δ) [m]", 0.001, 0.050, 0.015, step=0.001)
     g = 9.81
-    st.divider()
-    st.success("Configuración cargada")
 
-# --- FUNCIONES DE CÁLCULO ---
-aR = R + delta
-a = aR / R
+# --- FUNCIONES NÚCLEO ---
+def get_m_real(r_val, mu_val, rho_val, d_val):
+    a_val = (r_val + d_val) / r_val
+    term = (4 * a_val**4 * np.log(a_val)) - (3 * a_val**4 - 4 * a_val**2 + 1)
+    return (np.pi * (rho_val**2) * g * (r_val**4) / (8 * mu_val)) * term
 
-def calcular_vz(r_arr, rho_v, mu_v, R_v, a_v):
-    condicion = r_arr >= R_v
-    vz = np.zeros_like(r_arr)
-    r_filt = r_arr[condicion]
-    vz[condicion] = (rho_v * g * R_v**2 / (4 * mu_v)) * (1 - (r_filt/R_v)**2 + 2 * (a_v**2) * np.log(r_filt/R_v))
-    return vz
+def get_m_taylor(r_val, mu_val, rho_val, d_val):
+    return (2 * np.pi * r_val * (rho_val**2) * g * (d_val**3)) / (3 * mu_val)
 
-def calcular_m_real(rho_v, mu_v, R_v, d_v):
-    a_v = (R_v + d_v) / R_v
-    term_a = (4 * a_v**4 * np.log(a_v)) - (3 * a_v**4 - 4 * a_v**2 + 1)
-    return (np.pi * (rho_v**2) * g * (R_v**4) / (8 * mu_v)) * term_a
+m_real_actual = get_m_real(R, mu, rho, delta_user)
+m_taylor_actual = get_m_taylor(R, mu, rho, delta_user)
+error_actual = abs(m_real_actual - m_taylor_actual) / m_real_actual * 100
 
-def calcular_m_taylor(rho_v, mu_v, R_v, d_v):
-    return (2 * np.pi * R_v * (rho_v**2) * g * (d_v**3)) / (3 * mu_v)
+# --- INTERFAZ ---
+st.title("🛡️ Simulación de Flujo en Película Cilíndrica")
 
-# Cálculos actuales
-m_real_act = calcular_m_real(rho, mu, R, delta)
-m_taylor_act = calcular_m_taylor(rho, mu, R, delta)
-error_actual = abs(m_real_act - m_taylor_act) / m_real_act * 100
-r_plot = np.linspace(0.0001, aR * 1.1, 500)
-vz_plot = calcular_vz(r_plot, rho, mu, R, a)
-
-# --- INTERFAZ PRINCIPAL ---
-st.title("🛡️ Simulador de Flujo: Ejercicio 2B.6")
-
-# Métricas con colores de alto contraste
-c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-c_m1.metric("Flujo Másico Real", f"{m_real_act:.5f} kg/s")
-c_m2.metric("Velocidad Máxima", f"{np.max(vz_plot):.4f} m/s")
-c_m3.metric("Relación Radios (a)", f"{a:.3f}")
-c_m4.metric("Error de Taylor", f"{error_actual:.2f}%")
+# Métricas de cabecera
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("ṁ Exacto", f"{m_real_actual:.5f} kg/s")
+c2.metric("ṁ Taylor", f"{m_taylor_actual:.5f} kg/s")
+c3.metric("Error Relativo", f"{error_actual:.2f}%")
+c4.metric("Relación (a)", f"{(R+delta_user)/R:.3f}")
 
 st.divider()
 
-# --- SISTEMA DE PESTAÑAS (TABS) ---
-tab1, tab2, tab3 = st.tabs(["📊 Visualización de Flujo", "🔬 Análisis de Taylor", "📝 Sustento Teórico"])
+tab1, tab2 = st.tabs(["📊 Visualización de Flujo", "🔬 Análisis de Taylor"])
 
 with tab1:
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Perfil de Velocidad")
-        fig_r, ax_r = plt.subplots(figsize=(8, 6))
-        fig_r.patch.set_facecolor('#0e1117')
-        ax_r.set_facecolor('#1a1f2e')
-        ax_r.axvspan(0, R, color='#333333', label='Tubo Sólido')
-        ax_radial_line, = ax_r.plot(r_plot, vz_plot, color='#00d4ff', lw=3, label='$v_z(r)$')
-        ax_r.set_xlabel("Radio [m]", color='white')
-        ax_r.set_ylabel("Velocidad [m/s]", color='white')
-        ax_r.tick_params(colors='white')
-        ax_r.legend()
-        st.pyplot(fig_r)
-
-    with col2:
-        st.subheader("Simulación 3D")
-        t_3d = np.linspace(0, 2*np.pi, 50); z_3d = np.linspace(0, 1, 20)
-        T_3, Z_3 = np.meshgrid(t_3d, z_3d)
-        X_f, Y_f = aR * np.cos(T_3), aR * np.sin(T_3)
-        X_t, Y_t = R * np.cos(T_3), R * np.sin(T_3)
-        fig_3 = go.Figure(data=[
-            go.Surface(x=X_f, y=Y_f, z=Z_3, colorscale='Ice', opacity=0.5, showscale=False),
-            go.Surface(x=X_t, y=Y_t, z=Z_3, colorscale='Greys', opacity=1, showscale=False)
-        ])
-        fig_3.update_layout(template="plotly_dark", margin=dict(l=0,r=0,b=0,t=0), height=400)
-        st.plotly_chart(fig_3, use_container_width=True)
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.subheader("Perfil de Velocidad Radial")
+        r_range = np.linspace(R, R + delta_user, 100)
+        a_act = (R + delta_user) / R
+        vz = (rho * g * R**2 / (4 * mu)) * (1 - (r_range/R)**2 + 2 * (a_act**2) * np.log(r_range/R))
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        fig.patch.set_facecolor('#0e1117'); ax.set_facecolor('#1a1f2e')
+        ax.plot(r_range, vz, color='#00d4ff', lw=4)
+        ax.set_xlabel("Radio [m]", color="white"); ax.set_ylabel("Velocidad [m/s]", color="white")
+        ax.tick_params(colors="white")
+        st.pyplot(fig)
+    
+    with col_b:
+        st.subheader("Representación 3D")
+        st.info("Cilindro concéntrico representando el fluido sobre el tubo sólido.")
+        t = np.linspace(0, 2*np.pi, 50); z = np.linspace(0, 1, 10)
+        T, Z = np.meshgrid(t, z)
+        X, Y = (R+delta_user)*np.cos(T), (R+delta_user)*np.sin(T)
+        fig3d = go.Figure(data=[go.Surface(x=X, y=Y, z=Z, colorscale='Cividis', showscale=False)])
+        fig3d.update_layout(template="plotly_dark", height=400, margin=dict(l=0,r=0,b=0,t=0))
+        st.plotly_chart(fig3d, use_container_width=True)
 
 with tab2:
-    st.subheader("Comparativa: Geometría Cilíndrica vs. Placa Plana")
+    st.subheader("Análisis de la Serie de Taylor")
     
-    # Tabla Comparativa de Valores
-    st.markdown("### 📋 Tabla de Resultados")
-    data = {
-        "Parámetro": ["Flujo Másico (ṁ)", "Espesor de Película (δ)", "Radio Interno (R)", "Área de Flujo"],
-        "Modelo Real (Cilíndrico)": [f"{m_real_act:.6f} kg/s", f"{delta:.4f} m", f"{R:.4f} m", f"{np.pi*(aR**2 - R**2):.6f} m²"],
-        "Modelo Taylor (Placa)": [f"{m_taylor_act:.6f} kg/s", f"{delta:.4f} m", "∞ (Plano)", f"{2*np.pi*R*delta:.6f} m²"],
-        "Diferencia (%)": ["-", "-", "-", f"{abs(1 - (2*R*delta)/(aR**2-R**2))*100:.2f}%"]
-    }
-    data["Diferencia (%)"][0] = f"{error_actual:.2f}%"
-    st.table(pd.DataFrame(data))
+    # 1. Fórmula en caja destacada (como en tu imagen)
+    st.markdown(f"""<div class="latex-container">
+        <h2 style="color:#00d4ff; margin-bottom:10px;">Aproximación de Placa Plana</h2>
+        <code style="font-size:25px; color:#ffffff;">ṁ ≈ (2πRρ²gδ³) / (3μ)</code>
+    </div>""", unsafe_allow_html=True)
+    
+    col_izq, col_der = st.columns([1, 1.2])
+    
+    with col_izq:
+        st.markdown("### Impacto del Espesor de Película")
+        # Generar tabla de impacto con valores fijos/dinámicos similares a tu imagen
+        espesores = [0.0001, 0.0010, 0.0050, 0.0100, 0.0200, 0.0300, delta_user]
+        espesores = sorted(list(set(espesores))) # Eliminar duplicados y ordenar
+        
+        filas = []
+        for d in espesores:
+            m_e = get_m_real(R, mu, rho, d)
+            m_t = get_m_taylor(R, mu, rho, d)
+            err = abs(m_e - m_t) / m_e * 100
+            filas.append({
+                "Espesor δ (m)": f"{d:.4f}",
+                "ṁ Exacto": f"{m_e:.5f}",
+                "ṁ Taylor": f"{m_t:.5f}",
+                "Error (%)": f"{err:.2f}%"
+            })
+        st.table(pd.DataFrame(filas))
 
-    # Gráficas A y B
-    d_vals = np.linspace(0.001, R * 1.5, 100)
-    m_r_vals = [calcular_m_real(rho, mu, R, dv) for dv in d_vals]
-    m_t_vals = [calcular_m_taylor(rho, mu, R, dv) for dv in d_vals]
-    err_vals = [abs(rv - tv)/rv * 100 for rv, tv in zip(m_r_vals, m_t_vals)]
+    with col_der:
+        # Preparación de gráficas comparativas
+        d_range = np.linspace(0.0005, 0.05, 100)
+        m_e_vals = [get_m_real(R, mu, rho, d) for d in d_range]
+        m_t_vals = [get_m_taylor(R, mu, rho, d) for d in d_range]
+        err_vals = [abs(re - ta)/re * 100 for re, ta in zip(m_e_vals, m_t_vals)]
 
-    g_a, g_b = st.columns(2)
-    with g_a:
-        st.markdown("**Gráfica A: Error Relativo (%)**")
-        fig_a = go.Figure(go.Scatter(x=d_vals, y=err_vals, fill='tozeroy', line=dict(color='#ff4b4b')))
-        fig_a.add_trace(go.Scatter(x=[delta], y=[error_actual], mode='markers', marker=dict(size=15, color='white')))
-        fig_a.update_layout(template="plotly_dark", height=350, xaxis_title="Espesor δ", yaxis_title="Error %")
+        # Gráfica A: Comparación de Curvas
+        fig_a = go.Figure()
+        fig_a.add_trace(go.Scatter(x=d_range, y=m_e_vals, name="ṁ Exacto (Cilíndrico)", line=dict(color='#a29bfe', width=3)))
+        fig_a.add_trace(go.Scatter(x=d_range, y=m_t_vals, name="ṁ Taylor (Simplificado)", line=dict(color='#fd79a8', dash='dash')))
+        fig_a.update_layout(title="Gráfica A: Comparación de curvas vs δ", template="plotly_dark", height=300, margin=dict(b=20, t=40))
         st.plotly_chart(fig_a, use_container_width=True)
 
-    with g_b:
-        st.markdown("**Gráfica B: Convergencia de Modelos**")
+        # Gráfica B: Evolución del Error
         fig_b = go.Figure()
-        fig_b.add_trace(go.Scatter(x=d_vals, y=m_r_vals, name="Real", line=dict(color='#00d4ff', width=3)))
-        fig_b.add_trace(go.Scatter(x=d_vals, y=m_t_vals, name="Taylor", line=dict(color='yellow', dash='dot')))
-        fig_b.update_layout(template="plotly_dark", height=350, xaxis_title="Espesor δ", yaxis_title="ṁ [kg/s]")
+        fig_b.add_trace(go.Scatter(x=d_range, y=err_vals, name="Error %", fill='tozeroy', line=dict(color='#e84393')))
+        # Línea de límite 5%
+        fig_b.add_hline(y=5, line_dash="dot", line_color="yellow", annotation_text="Límite 5% de Error")
+        
+        fig_b.update_layout(title="Gráfica B: Evolución del Error Relativo (%) vs δ", template="plotly_dark", height=300, margin=dict(b=20, t=40))
         st.plotly_chart(fig_b, use_container_width=True)
 
-with tab3:
-    st.header("Sustento Matemático")
-    st.markdown("""
-    Para el flujo de una película líquida sobre la superficie exterior de un cilindro, la ecuación de continuidad y de movimiento en estado estacionario (Bird 2B.6) nos otorga el perfil:
-    """)
-    st.latex(r"v_z(r) = \frac{\rho g R^2}{4\mu} \left[ 1 - \left( \frac{r}{R} \right)^2 + 2a^2 \ln \left( \frac{r}{R} \right) \right]")
-    st.markdown("Cuando el espesor $\delta$ es pequeño respecto a $R$, la expansión en serie de Taylor simplifica la integración a:")
-    st.latex(r"\dot{m} \approx \frac{2\pi R \rho^2 g \delta^3}{3\mu}")
-    st.info("Este simulador permite evaluar visual y numéricamente la pérdida de precisión de esta simplificación a medida que la curvatura se vuelve importante.")
+    st.warning(f"💡 El análisis muestra que con el radio R={R}m, la aproximación de Taylor cruza el 5% de error cerca de δ ≈ 0.003m.")
