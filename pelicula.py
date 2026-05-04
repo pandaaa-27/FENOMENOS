@@ -11,12 +11,10 @@ st.set_page_config(page_title="Simulador UNMSM - Ejercicio 2B6", layout="wide")
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
-    /* Métricas en Blanco Puro para máximo contraste */
     [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2.5rem !important; font-weight: 800 !important; }
     [data-testid="stMetricLabel"] { color: #00d4ff !important; font-size: 1.1rem !important; }
     .stMetric { background-color: #1a1f2e; padding: 15px; border-radius: 10px; border: 1px solid #31333f; }
     
-    /* Caja de Fórmula Taylor - Fondo Negro y Letra Amarilla Neón */
     .formula-box { 
         background-color: #000000; padding: 25px; border-radius: 15px; 
         border: 2px solid #00d4ff; text-align: center; margin-bottom: 25px;
@@ -48,6 +46,12 @@ def get_m_real(r_v, mu_v, rho_v, d_v):
     term = (4 * a_v**4 * np.log(a_v)) - (3 * a_v**4 - 4 * a_v**2 + 1)
     return (np.pi * (rho_v**2) * g * (r_v**4) / (8 * mu_v)) * term
 
+def get_vz_prom(r_v, mu_v, rho_v, d_v):
+    a_v = (r_v + d_v) / r_v
+    # <vz> = (rho * g * R^2 / 8 * mu) * [ (4*a^4*ln(a) / (a^2 - 1)) - (3*a^2 - 1) ]
+    term = ( (4 * a_v**4 * np.log(a_v)) / (a_v**2 - 1) ) - (3 * a_v**2 - 1)
+    return (rho_v * g * r_v**2 / (8 * mu_v)) * term
+
 def get_m_taylor(r_v, mu_v, rho_v, d_v):
     return (2 * np.pi * r_v * (rho_v**2) * g * (d_v**3)) / (3 * mu_v)
 
@@ -55,6 +59,7 @@ def get_m_taylor(r_v, mu_v, rho_v, d_v):
 m_r_act = get_m_real(R, mu, rho, delta_user)
 m_t_act = get_m_taylor(R, mu, rho, delta_user)
 vz_max_act = get_vz(R + delta_user, R, mu, rho, delta_user)
+vz_prom_act = get_vz_prom(R, mu, rho, delta_user)
 err_act = abs(m_r_act - m_t_act) / m_r_act * 100
 
 # --- INTERFAZ ---
@@ -80,13 +85,11 @@ with tab1:
         z_c = np.linspace(0, 10, 20); th = np.linspace(0, 2*np.pi, 50)
         Z_c, T_c = np.meshgrid(z_c, th)
         
-        # Tubo Interno (Gris Oscuro Sólido)
         fig3d.add_trace(go.Surface(x=R*np.cos(T_c), y=R*np.sin(T_c), z=Z_c, 
                                    colorscale=[[0, '#1a1a1a'], [1, '#404040']], opacity=1, showscale=False))
-        # Película Exterior (Cian Neón translúcido)
         fig3d.add_trace(go.Surface(x=(R+delta_user)*np.cos(T_c), y=(R+delta_user)*np.sin(T_c), z=Z_c, 
                                    colorscale=[[0, '#00d4ff'], [1, '#00d4ff']], opacity=0.35, showscale=False))
-        # Flechas de flujo (pequeñas verdes)
+        
         for zp in [2, 5, 8]:
             for ang in np.linspace(0, 2*np.pi, 8, endpoint=False):
                 fig3d.add_trace(go.Cone(x=[(R+delta_user/2)*np.cos(ang)], y=[(R+delta_user/2)*np.sin(ang)], z=[zp], 
@@ -103,16 +106,24 @@ with tab1:
         vz_vals = get_vz(r_vals, R, mu, rho, delta_user)
         fig_rad = go.Figure(go.Scatter(x=r_vals, y=vz_vals, fill='tozeroy', line=dict(color='#00d4ff', width=4), 
                                        fillcolor='rgba(0, 212, 255, 0.2)', name="Vz(r)"))
-        fig_rad.update_layout(template="plotly_dark", xaxis_title="Radio r [m]", yaxis_title="Velocidad [m/s]", height=450)
+        fig_rad.update_layout(template="plotly_dark", xaxis_title="Radio r [m]", yaxis_title="Velocidad [m/s]", height=400)
         st.plotly_chart(fig_rad, use_container_width=True)
+        
+        # MÉTRICA DE VELOCIDAD PROMEDIO DEBAJO DEL PERFIL
+        st.metric("Velocidad Promedio ⟨vz⟩", f"{vz_prom_act:.4f} m/s")
     
     st.divider()
     st.markdown("### Ecuaciones del Modelo Cilíndrico")
-    ec1, ec2 = st.columns(2)
+    ec1, ec2, ec3 = st.columns(3)
     with ec1:
+        st.markdown("**Perfil de Velocidad $v_z(r)$:**")
         st.latex(r"v_z(r) = \frac{\rho g R^2}{4\mu} \left[ 1 - \left( \frac{r}{R} \right)^2 + 2a^2 \ln \left( \frac{r}{R} \right) \right]")
     with ec2:
+        st.markdown("**Flujo Másico Total $\dot{m}$:**")
         st.latex(r"\dot{m} = \frac{\pi \rho^2 g R^4}{8\mu} \left[ 4a^4 \ln a - (3a^4 - 4a^2 + 1) \right]")
+    with ec3:
+        st.markdown("**Velocidad Promedio $\langle v_z \rangle$:**")
+        st.latex(r"\langle v_z \rangle = \frac{\rho g R^2}{8\mu} \left[ \frac{4a^4 \ln a}{a^2 - 1} - (3a^2 - 1) \right]")
 
 with tab2:
     st.subheader("Análisis Comparativo de Taylor")
@@ -127,12 +138,11 @@ with tab2:
         st.table(pd.DataFrame(filas))
 
     with c_graf:
-        d_range = np.linspace(0.0001, 0.5, 150) # Rango extendido para ver divergencia
+        d_range = np.linspace(0.0001, 0.5, 150)
         m_e = [get_m_real(R,mu,rho,d) for d in d_range]
         m_t = [get_m_taylor(R,mu,rho,d) for d in d_range]
         err = [abs(re - ta)/re*100 if re != 0 else 0 for re, ta in zip(m_e, m_t)]
         
-        # --- GRÁFICA A: COMPARACIÓN DE CURVAS ---
         fig_a = go.Figure()
         fig_a.add_trace(go.Scatter(x=d_range, y=m_e, name="m_exacto (Cilíndrico)", line=dict(color='#a29bfe', width=3)))
         fig_a.add_trace(go.Scatter(x=d_range, y=m_t, name="m_simplificado (Taylor)", line=dict(color='#fd79a8', width=3, dash='dash')))
@@ -140,8 +150,7 @@ with tab2:
                              xaxis_title="Espesor δ [m]", yaxis_title="ṁ [kg/s]", legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
         st.plotly_chart(fig_a, use_container_width=True)
 
-        # --- GRÁFICA B: EVOLUCIÓN DEL ERROR ---
-        d_lim = 0 # Buscador de límite 5%
+        d_lim = 0
         for i in range(len(err)-1):
             if err[i] <= 5 <= err[i+1]:
                 d_lim = d_range[i] + (5 - err[i]) * (d_range[i+1]-d_range[i]) / (err[i+1]-err[i])
