@@ -31,7 +31,7 @@ with st.sidebar:
     delta_user = st.slider("Espesor Película δ [m]", 0.001, 0.040, 0.015, step=0.001)
     g = 9.81
 
-# --- FUNCIONES MATEMÁTICAS ---
+# --- LÓGICA MATEMÁTICA ---
 def get_m_real(r_v, mu_v, rho_v, d_v):
     a_v = (r_v + d_v) / r_v
     term = (4 * a_v**4 * np.log(a_v)) - (3 * a_v**4 - 4 * a_v**2 + 1)
@@ -47,10 +47,10 @@ err_act = abs(m_r_act - m_t_act) / m_r_act * 100
 # --- INTERFAZ ---
 st.title("Simulación de Flujo en Película Cilíndrica Descendente")
 
-# Métricas principales en la cabecera
+# Métricas principales
 m1, m2, m3 = st.columns(3)
-m1.metric("ṁ Exacto (Cilíndrico)", f"{m_r_act:.5f} kg/s")
-m2.metric("ṁ Taylor (Simplificado)", f"{m_t_act:.5f} kg/s")
+m1.metric("ṁ Exacto (Bird 2B.6)", f"{m_r_act:.5f} kg/s")
+m2.metric("ṁ Taylor (Aprox.)", f"{m_t_act:.5f} kg/s")
 m3.metric("Error Relativo", f"{err_act:.2f}%")
 
 st.divider()
@@ -63,17 +63,26 @@ with tab1:
     with col_izq:
         st.subheader("Representación Física 3D")
         fig3d = go.Figure()
-        z_c = np.linspace(0, 10, 20); th = np.linspace(0, 2*np.pi, 40)
+        z_c = np.linspace(0, 10, 20); th = np.linspace(0, 2*np.pi, 50)
         Z_c, T_c = np.meshgrid(z_c, th)
-        # Tubo y Película
-        fig3d.add_trace(go.Surface(x=R*np.cos(T_c), y=R*np.sin(T_c), z=Z_c, colorscale='Greys', opacity=1, showscale=False))
-        fig3d.add_trace(go.Surface(x=(R+delta_user)*np.cos(T_c), y=(R+delta_user)*np.sin(T_c), z=Z_c, colorscale='RdPu', opacity=0.3, showscale=False))
-        # Flechas pequeñas
+        
+        # 1. Tubo Central (Gris Oscuro Sólido)
+        fig3d.add_trace(go.Surface(x=R*np.cos(T_c), y=R*np.sin(T_c), z=Z_c, 
+                                   colorscale=[[0, '#1a1a1a'], [1, '#404040']], opacity=1, showscale=False))
+        
+        # 2. Película de Líquido (Cian Neón Translúcido) - Aquí se nota el espesor
+        fig3d.add_trace(go.Surface(x=(R+delta_user)*np.cos(T_c), y=(R+delta_user)*np.sin(T_c), z=Z_c, 
+                                   colorscale=[[0, '#00d4ff'], [1, '#005f73']], opacity=0.4, showscale=False))
+        
+        # Flechas de flujo (pequeñas y precisas)
         for zp in [2, 5, 8]:
-            for ang in np.linspace(0, 2*np.pi, 6, endpoint=False):
+            for ang in np.linspace(0, 2*np.pi, 8, endpoint=False):
                 fig3d.add_trace(go.Cone(x=[(R+delta_user/2)*np.cos(ang)], y=[(R+delta_user/2)*np.sin(ang)], z=[zp], 
-                                        u=[0], v=[0], w=[-0.6], colorscale='Greens', sizemode="absolute", sizeref=0.1, showscale=False))
-        fig3d.update_layout(template="plotly_dark", height=500, margin=dict(l=0,r=0,b=0,t=0))
+                                        u=[0], v=[0], w=[-0.5], colorscale=[[0, '#00ff00'], [1, '#00ff00']], 
+                                        sizemode="absolute", sizeref=0.1, showscale=False))
+        
+        fig3d.update_layout(scene=dict(xaxis_title='X [m]', yaxis_title='Y [m]', zaxis_title='Z [m]'),
+                            template="plotly_dark", height=500, margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig3d, use_container_width=True)
 
     with col_der:
@@ -86,12 +95,18 @@ with tab1:
         st.plotly_chart(fig_rad, use_container_width=True)
         
     st.divider()
-    st.markdown("### Ecuaciones del Modelo")
-    st.latex(r"v_z(r) = \frac{\rho g R^2}{4\mu} \left[ 1 - \left( \frac{r}{R} \right)^2 + 2a^2 \ln \left( \frac{r}{R} \right) \right]")
+    st.markdown("### Ecuaciones del Modelo (Cilíndrico)")
+    c_eq1, c_eq2 = st.columns(2)
+    with c_eq1:
+        st.markdown("**Perfil de Velocidad $v_z(r)$:**")
+        st.latex(r"v_z(r) = \frac{\rho g R^2}{4\mu} \left[ 1 - \left( \frac{r}{R} \right)^2 + 2a^2 \ln \left( \frac{r}{R} \right) \right]")
+    with c_eq2:
+        st.markdown("**Flujo Másico Total $\dot{m}$:**")
+        st.latex(r"\dot{m} = \frac{\pi \rho^2 g R^4}{8\mu} \left[ 4a^4 \ln a - (3a^4 - 4a^2 + 1) \right]")
 
 with tab2:
     st.subheader("Estudio de la Aproximación de Taylor")
-    st.markdown(f'<div class="formula-box"><div class="formula-text">ṁ ≈ (2πRρ²gδ³) / (3μ)</div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="formula-box"><div style="color:#00d4ff; margin-bottom:5px;">Ecuación Simplificada (Placa Plana):</div><div class="formula-text">ṁ ≈ (2πRρ²gδ³) / (3μ)</div></div>', unsafe_allow_html=True)
     
     c_tab, c_graf = st.columns([1, 1.2])
     
@@ -107,16 +122,14 @@ with tab2:
         m_t = [get_m_taylor(R,mu,rho,d) for d in d_range]
         err = [abs(re-ta)/re*100 for re, ta in zip(m_e, m_t)]
         
-        # Gráfica A
         fig_a = go.Figure()
-        fig_a.add_trace(go.Scatter(x=d_range, y=m_e, name="m_exacto (Cilíndrico)", line=dict(color='#a29bfe')))
-        fig_a.add_trace(go.Scatter(x=d_range, y=m_t, name="m_simplificado (Taylor)", line=dict(color='#fd79a8', dash='dash')))
-        fig_a.update_layout(title="Gráfica A: Comparación de curvas vs δ", template="plotly_dark", height=300, margin=dict(t=40, b=40))
+        fig_a.add_trace(go.Scatter(x=d_range, y=m_e, name="m_exacto", line=dict(color='#a29bfe', width=3)))
+        fig_a.add_trace(go.Scatter(x=d_range, y=m_t, name="m_taylor", line=dict(color='#fd79a8', dash='dash')))
+        fig_a.update_layout(title="Gráfica A: Comparación de Curvas", template="plotly_dark", height=300)
         st.plotly_chart(fig_a, use_container_width=True)
         
-        # Gráfica B
         fig_b = go.Figure()
         fig_b.add_trace(go.Scatter(x=d_range, y=err, name="Error %", fill='tozeroy', line=dict(color='#e84393')))
-        fig_b.add_hline(y=5, line_dash="dot", line_color="yellow", annotation_text="Límite 5% de Error")
-        fig_b.update_layout(title="Gráfica B: Evolución del Error Relativo (%) vs δ", template="plotly_dark", height=300, margin=dict(t=40, b=40))
+        fig_b.add_hline(y=5, line_dash="dot", line_color="yellow", annotation_text="Límite 5% Error")
+        fig_b.update_layout(title="Gráfica B: Evolución del Error Relativo", template="plotly_dark", height=300)
         st.plotly_chart(fig_b, use_container_width=True)
