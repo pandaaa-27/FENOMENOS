@@ -1,12 +1,3 @@
-El código que compartes ya tiene un slider de espesor (`delta_user = st.slider("Espesor Película δ [m]", ...)`) incorporado en el sidebar. Sin embargo, analizando tu lógica, el "problema" técnico es que en el cálculo de las curvas de las **Gráficas A y B** estás evaluando un rango fijo muy amplio que va desde `0.0001` hasta `0.5` metros (`d_range = np.linspace(0.0001, 0.5, 150)`).
-
-Cuando el usuario mueve el slider para valores pequeños (como `0.015 m`), la gráfica no permite apreciar el punto de operación actual porque queda completamente comprimido al inicio del eje $X$.
-
-Para solucionarlo y lograr que **el valor del slider altere dinámicamente el análisis y las curvas de Taylor**, he ajustado el rango de las gráficas (`d_range`) para que se adapte de forma inteligente a un múltiplo del espesor que el usuario elija. Además, agregué el **punto interactivo de operación actual** con un marcador en ambas gráficas.
-
-Aquí tienes el código completo y corregido:
-
-```python
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
@@ -117,7 +108,6 @@ with tab1:
         fig_rad.update_layout(template="plotly_dark", xaxis_title="Radio r [m]", yaxis_title="Velocidad [m/s]", height=400)
         st.plotly_chart(fig_rad, use_container_width=True)
         
-        # MÉTRICA DE VELOCIDAD PROMEDIO DEBAJO DEL PERFIL
         st.metric("Velocidad Promedio ⟨vz⟩", f"{vz_prom_act:.4f} m/s")
     
     st.divider()
@@ -146,8 +136,6 @@ with tab2:
         st.table(pd.DataFrame(filas))
 
     with c_graf:
-        # CAMBIO CLAVE: Escalar el rango de las gráficas dinámicamente según delta_user
-        # Se extiende hasta 3 veces el valor del slider actual para evaluar la divergencia de forma clara
         d_range = np.linspace(0.0001, max(delta_user * 3.0, 0.03), 150)
         m_e = [get_m_real(R,mu,rho,d) for d in d_range]
         m_t = [get_m_taylor(R,mu,rho,d) for d in d_range]
@@ -158,7 +146,6 @@ with tab2:
         fig_a.add_trace(go.Scatter(x=d_range, y=m_e, name="m_exacto (Cilíndrico)", line=dict(color='#a29bfe', width=3)))
         fig_a.add_trace(go.Scatter(x=d_range, y=m_t, name="m_simplificado (Taylor)", line=dict(color='#fd79a8', width=3, dash='dash')))
         
-        # MARCADOR: Punto de operación actual del Slider en la Gráfica A
         fig_a.add_trace(go.Scatter(x=[delta_user], y=[m_r_act], mode='markers', name='Punto de Operación',
                                    marker=dict(color='#ffff00', size=12, symbol='circle', line=dict(color='white', width=1.5))))
         
@@ -179,7 +166,6 @@ with tab2:
                                    line=dict(color='#ff007f', width=3), fillcolor='rgba(255, 0, 127, 0.2)'))
         fig_b.add_hline(y=5, line_dash="dash", line_color="#ffff00", line_width=2)
         
-        # MARCADOR: Punto de operación del Slider en la Gráfica B
         fig_b.add_trace(go.Scatter(x=[delta_user], y=[err_act], mode='markers', name='Error de Operación',
                                    marker=dict(color='white', size=10, symbol='x')))
         
@@ -190,5 +176,3 @@ with tab2:
         fig_b.update_layout(title="Gráfica B: Evolución del Error Relativo (%) vs δ", template="plotly_dark", height=320,
                               xaxis_title="Espesor δ [m]", yaxis_title="Error (%)")
         st.plotly_chart(fig_b, use_container_width=True)
-
-```
