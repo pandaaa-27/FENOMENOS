@@ -1,178 +1,175 @@
 import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import pandas as pd
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Simulador UNMSM - Ejercicio 2B6", layout="wide")
+st.set_page_config(page_title="Simulador de Flujo: Ejercicio 2B.6 - Bird", layout="wide")
 
-# --- ESTILO CSS (Métricas blancas y fórmulas neón) ---
+# --- ESTILO CSS PREMIUM ALTO CONTRASTE ---
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
-    [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2.5rem !important; font-weight: 800 !important; }
+    [data-testid="stMetricValue"] { color: #ffffff !important; font-size: 2.3rem !important; font-weight: 800 !important; }
     [data-testid="stMetricLabel"] { color: #00d4ff !important; font-size: 1.1rem !important; }
     .stMetric { background-color: #1a1f2e; padding: 15px; border-radius: 10px; border: 1px solid #31333f; }
     
     .formula-box { 
-        background-color: #000000; padding: 25px; border-radius: 15px; 
-        border: 2px solid #00d4ff; text-align: center; margin-bottom: 25px;
-        box-shadow: 0px 0px 15px rgba(0, 212, 255, 0.4);
+        background-color: #000000; padding: 20px; border-radius: 12px; 
+        border: 2px solid #00d4ff; text-align: center; margin-bottom: 20px;
     }
-    .formula-text { font-family: 'Courier New', monospace; font-size: 30px; font-weight: bold; color: #ffff00; }
-    .section-title { color: #ff00ff; font-weight: bold; font-size: 1.3rem; text-transform: uppercase; }
+    .formula-text { font-family: 'Courier New', monospace; font-size: 26px; font-weight: bold; color: #ffff00; }
+    .section-title { color: #ff00ff; font-weight: bold; font-size: 1.3rem; text-transform: uppercase; margin-bottom: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- PARÁMETROS EN SIDEBAR ---
+# --- SIDEBAR DE CONTROL ---
 with st.sidebar:
     st.header("Parámetros de Entrada")
-    rho = st.slider("Densidad ρ [kg/m³]", 800, 1500, 1000)
-    mu = st.slider("Viscosidad μ [Pa·s]", 0.01, 1.00, 0.10, step=0.01)
-    R = st.number_input("Radio del Tubo R [m]", 0.010, 0.500, 0.050, format="%.3f")
-    delta_user = st.slider("Espesor Película δ [m]", 0.001, 0.050, 0.015, step=0.001)
+    rho = st.slider("Densidad (ρ) [kg/m³]", 800, 1500, 1200)
+    mu = st.slider("Viscosidad (μ) [Pa·s]", 0.01, 1.00, 0.50, step=0.01)
+    R = st.number_input("Radio del Tubo (R) [m]", 0.010, 0.500, 0.050, format="%.3f")
+    delta_user = st.slider("Espesor Película (δ) [m]", 0.001, 0.050, 0.030, step=0.001)
     g = 9.81
     if st.button("🔄 RESETEAR VALORES"):
         st.rerun()
 
-# --- LÓGICA MATEMÁTICA ---
-def get_vz(r_val, r_v, mu_v, rho_v, d_v):
-    a_v = (r_v + d_v) / r_v
-    return (rho_v * g * r_v**2 / (4 * mu_v)) * (1 - (r_val/r_v)**2 + 2 * (a_v**2) * np.log(r_val/r_v))
+# --- LÓGICA MATEMÁTICA RÍGIDA (BIRD 2B.6) ---
+a = (R + delta_user) / R
 
-def get_m_real(r_v, mu_v, rho_v, d_v):
-    a_v = (r_v + d_v) / r_v
-    term = (4 * a_v**4 * np.log(a_v)) - (3 * a_v**4 - 4 * a_v**2 + 1)
-    return (np.pi * (rho_v**2) * g * (r_v**4) / (8 * mu_v)) * term
+# 1. Perfil de Velocidad Exacto
+def get_vz(r, R_v, mu_v, rho_v, a_v):
+    return (rho_v * g * R_v**2 / (4 * mu_v)) * (1 - (r/R_v)**2 + 2 * (a_v**2) * np.log(r/R_v))
 
-def get_vz_prom(r_v, mu_v, rho_v, d_v):
-    a_v = (r_v + d_v) / r_v
-    term = ( (4 * a_v**4 * np.log(a_v)) / (a_v**2 - 1) ) - (3 * a_v**2 - 1)
-    return (rho_v * g * r_v**2 / (8 * mu_v)) * term
+# 2. Flujo Másico Real Exacto
+def get_m_real(R_v, mu_v, rho_v, a_v):
+    term = (4 * (a_v**4) * np.log(a_v)) - (3 * (a_v**4) - 4 * (a_v**2) + 1)
+    return (np.pi * (rho_v**2) * g * (R_v**4) / (8 * mu_v)) * term
 
-def get_m_taylor(r_v, mu_v, rho_v, d_v):
-    return (2 * np.pi * r_v * (rho_v**2) * g * (d_v**3)) / (3 * mu_v)
+# 3. Velocidad Promedio Exacta
+def get_vz_prom(R_v, mu_v, rho_v, a_v):
+    term = ((4 * (a_v**4) * np.log(a_v)) / (a_v**2 - 1)) - (3 * a_v**2 - 1)
+    return (rho_v * g * R_v**2 / (8 * mu_v)) * term
 
-# Cálculos para la cabecera
-m_r_act = get_m_real(R, mu, rho, delta_user)
-m_t_act = get_m_taylor(R, mu, rho, delta_user)
-vz_max_act = get_vz(R + delta_user, R, mu, rho, delta_user)
-vz_prom_act = get_vz_prom(R, mu, rho, delta_user)
-err_act = abs(m_r_act - m_t_act) / m_r_act * 100
+# 4. Aproximación de Taylor (Placa Plana)
+def get_m_taylor(R_v, mu_v, rho_v, d_v):
+    return (2 * np.pi * R_v * (rho_v**2) * g * (d_v**3)) / (3 * mu_v)
 
-# --- INTERFAZ ---
-st.title("🛡️ Simulación de Flujo en Película Cilíndrica (Bird 2B.6)")
+# Ejecución de Cálculos de Operación
+m_real = get_m_real(R, mu, rho, a)
+m_taylor = get_m_taylor(R, mu, rho, delta_user)
+vz_max = get_vz(R + delta_user, R, mu, rho, a)
+vz_prom = get_vz_prom(R, mu, rho, a)
+error_rel = abs(m_real - m_taylor) / m_real * 100
 
-# Métricas Superiores
+# --- INTERFAZ GRÁFICA ---
+st.title("🛡️ Simulación de Flujo: Ejercicio 2B.6 - Bird")
+
+# Panel de Métricas Superior
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("ṁ Exacto", f"{m_r_act:.5f} kg/s")
-c2.metric("Vz Máxima", f"{vz_max_act:.4f} m/s")
-c3.metric("ṁ Taylor", f"{m_t_act:.5f} kg/s")
-c4.metric("Error Relativo", f"{err_act:.2f}%")
+c1.metric("m_real", f"{m_real:.5f} kg/s")
+c2.metric("vz_max", f"{vz_max:.4f} m/s")
+c3.metric("m_taylor", f"{m_taylor:.5f} kg/s")
+c4.metric("Error Relative", f"{error_rel:.2f}%")
 
 st.divider()
 
-tab1, tab2 = st.tabs(["📊 Visualización Física", "🔬 Análisis de Taylor"])
+tab1, tab2 = st.tabs(["Visualización de Flujo", "Análisis de Taylor"])
 
 with tab1:
     col_izq, col_der = st.columns(2)
     
     with col_izq:
-        st.markdown('<p class="section-title">Representación Física 3D</p>', unsafe_allow_html=True)
+        st.markdown('<p class="section-title">Representación Física</p>', unsafe_allow_html=True)
         fig3d = go.Figure()
-        z_c = np.linspace(0, 10, 20); th = np.linspace(0, 2*np.pi, 50)
+        z_c = np.linspace(0, 10, 20)
+        th = np.linspace(0, 2*np.pi, 50)
         Z_c, T_c = np.meshgrid(z_c, th)
         
+        # Tubo Central Sólido
         fig3d.add_trace(go.Surface(x=R*np.cos(T_c), y=R*np.sin(T_c), z=Z_c, 
                                    colorscale=[[0, '#1a1a1a'], [1, '#404040']], opacity=1, showscale=False))
+        # Película Translúcida
         fig3d.add_trace(go.Surface(x=(R+delta_user)*np.cos(T_c), y=(R+delta_user)*np.sin(T_c), z=Z_c, 
                                    colorscale=[[0, '#00d4ff'], [1, '#00d4ff']], opacity=0.35, showscale=False))
-        
+        # Flechas vectoriales de caída
         for zp in [2, 5, 8]:
             for ang in np.linspace(0, 2*np.pi, 8, endpoint=False):
                 fig3d.add_trace(go.Cone(x=[(R+delta_user/2)*np.cos(ang)], y=[(R+delta_user/2)*np.sin(ang)], z=[zp], 
                                         u=[0], v=[0], w=[-0.6], colorscale=[[0, '#00ff00'], [1, '#00ff00']], 
                                         sizemode="absolute", sizeref=0.1, showscale=False))
         
-        fig3d.update_layout(scene=dict(xaxis_title='X [m]', yaxis_title='Y [m]', zaxis_title='Altura Z'),
-                            template="plotly_dark", height=500, margin=dict(l=0,r=0,b=0,t=0))
+        fig3d.update_layout(scene=dict(xaxis_title='X [m]', yaxis_title='Y [m]', zaxis_title='Altura Z [m]'),
+                            template="plotly_dark", height=450, margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig3d, use_container_width=True)
 
     with col_der:
-        st.markdown('<p class="section-title">Perfil de Velocidad Vz(r)</p>', unsafe_allow_html=True)
-        r_vals = np.linspace(R, R + delta_user, 100)
-        vz_vals = get_vz(r_vals, R, mu, rho, delta_user)
-        fig_rad = go.Figure(go.Scatter(x=r_vals, y=vz_vals, fill='tozeroy', line=dict(color='#00d4ff', width=4), 
+        st.markdown('<p class="section-title">Perfil de Velocidad</p>', unsafe_allow_html=True)
+        r_vals = np.linspace(R, R + delta_user, 200)
+        vz_vals = get_vz(r_vals, R, mu, rho, a)
+        
+        fig_rad = go.Figure()
+        fig_rad.add_trace(go.Scatter(x=r_vals, y=vz_vals, fill='tozeroy', line=dict(color='#00d4ff', width=4), 
                                        fillcolor='rgba(0, 212, 255, 0.2)', name="Vz(r)"))
-        fig_rad.update_layout(template="plotly_dark", xaxis_title="Radio r [m]", yaxis_title="Velocidad [m/s]", height=400)
+        fig_rad.update_layout(template="plotly_dark", xaxis_title="r (m)", yaxis_title="Vz(r)", height=350,
+                              xaxis=dict(range=[R*0.9, (R+delta_user)*1.1]))
         st.plotly_chart(fig_rad, use_container_width=True)
         
-        st.metric("Velocidad Promedio ⟨vz⟩", f"{vz_prom_act:.4f} m/s")
-    
+        # Métrica de Velocidad Promedio abajo del Perfil
+        st.metric("Velocidad Promedio ⟨v_z⟩", f"{vz_prom:.4f} m/s")
+        
     st.divider()
-    st.markdown("### Ecuaciones del Modelo Cilíndrico")
+    st.markdown("### Ecuaciones del Modelo (Cilíndrico)")
     ec1, ec2, ec3 = st.columns(3)
     with ec1:
-        st.markdown("**Perfil de Velocidad $v_z(r)$:**")
-        st.latex(r"v_z(r) = \frac{\rho g R^2}{4\mu} \left[ 1 - \left( \frac{r}{R} \right)^2 + 2a^2 \ln \left( \frac{r}{R} \right) \right]")
+        st.markdown("Profile")
+        st.latex(r"V_z(r) = \frac{\rho g R^2}{4\mu} \left[ 1 - \left( \frac{r}{R} \right)^2 + 2a^2 \ln \left( \frac{r}{R} \right) \right]")
     with ec2:
-        st.markdown("**Flujo Másico Total $\dot{m}$:**")
+        st.markdown("Mass Flow")
         st.latex(r"\dot{m} = \frac{\pi \rho^2 g R^4}{8\mu} \left[ 4a^4 \ln a - (3a^4 - 4a^2 + 1) \right]")
     with ec3:
-        st.markdown("**Velocidad Promedio $\langle v_z \rangle$:**")
+        st.markdown("Average Velocity $\langle v_z \rangle$")
         st.latex(r"\langle v_z \rangle = \frac{\rho g R^2}{8\mu} \left[ \frac{4a^4 \ln a}{a^2 - 1} - (3a^2 - 1) \right]")
 
 with tab2:
-    st.subheader("Análisis Comparativo de Taylor")
-    st.markdown(f'<div class="formula-box"><div style="color:#00d4ff; font-size:18px; margin-bottom:10px;">Aproximación para Películas Delgadas (Plano):</div><div class="formula-text">ṁ ≈ (2πRρ²gδ³) / (3μ)</div></div>', unsafe_allow_html=True)
+    st.markdown('<p class="section-title">Análisis de Taylor</p>', unsafe_allow_html=True)
+    st.markdown(f'<div class="formula-box"><div style="color:#00d4ff; font-size:18px; margin-bottom:10px;">Aproximación para Películas Delgadas (Placa Plana):</div><div class="formula-text">ṁ ≈ (2πRρ²gδ³) / (3μ)</div></div>', unsafe_allow_html=True)
     
     c_tab, c_graf = st.columns([1, 1.2])
     
     with c_tab:
         st.markdown("**Impacto del Espesor de Película**")
         espesores = sorted(list(set([0.0001, 0.0010, 0.0050, 0.0100, 0.0200, 0.0300, delta_user])))
-        filas = [{"Espesor δ (m)": d, "ṁ real": f"{get_m_real(R,mu,rho,d):.5f}", "ṁ Taylor": f"{get_m_taylor(R,mu,rho,d):.5f}", "Error (%)": f"{abs(get_m_real(R,mu,rho,d)-get_m_taylor(R,mu,rho,d))/get_m_real(R,mu,rho,d)*100:.2f}%"} for d in espesores]
+        filas = [{"Espesor δ (m)": d, "ṁ exacto": f"{get_m_real(R,mu,rho,(R+d)/R):.5f}", "ṁ Taylor": f"{get_m_taylor(R,mu,rho,d):.5f}", "Error (%)": f"{abs(get_m_real(R,mu,rho,(R+d)/R)-get_m_taylor(R,mu,rho,d))/get_m_real(R,mu,rho,(R+d)/R)*100:.2f}%"} for d in espesores]
         st.table(pd.DataFrame(filas))
 
     with c_graf:
-        d_range = np.linspace(0.0001, max(delta_user * 3.0, 0.03), 150)
-        m_e = [get_m_real(R,mu,rho,d) for d in d_range]
+        d_range = np.linspace(0.0001, max(delta_user * 2.5, 0.04), 150)
+        m_e = [get_m_real(R,mu,rho,(R+d)/R) for d in d_range]
         m_t = [get_m_taylor(R,mu,rho,d) for d in d_range]
         err = [abs(re - ta)/re*100 if re != 0 else 0 for re, ta in zip(m_e, m_t)]
         
-        # --- GRÁFICA A: COMPARACIÓN DE CURVAS ---
+        # Gráfica A
         fig_a = go.Figure()
-        fig_a.add_trace(go.Scatter(x=d_range, y=m_e, name="m_exacto (Cilíndrico)", line=dict(color='#a29bfe', width=3)))
-        fig_a.add_trace(go.Scatter(x=d_range, y=m_t, name="m_simplificado (Taylor)", line=dict(color='#fd79a8', width=3, dash='dash')))
-        
-        fig_a.add_trace(go.Scatter(x=[delta_user], y=[m_r_act], mode='markers', name='Punto de Operación',
-                                   marker=dict(color='#ffff00', size=12, symbol='circle', line=dict(color='white', width=1.5))))
-        
-        fig_a.update_layout(title="Gráfica A: Comparación de curvas vs δ", template="plotly_dark", height=320,
-                             xaxis_title="Espesor δ [m]", yaxis_title="ṁ [kg/s]", legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01))
+        fig_a.add_trace(go.Scatter(x=d_range, y=m_e, name="m_r", line=dict(color='#a29bfe', width=3)))
+        fig_a.add_trace(go.Scatter(x=d_range, y=m_t, name="m_t", line=dict(color='#fd79a8', width=2, dash='dash')))
+        fig_a.add_trace(go.Scatter(x=[delta_user], y=[m_real], mode='markers', name='Punto actual', marker=dict(color='#ffff00', size=12)))
+        fig_a.update_layout(title="Gráfica A", template="plotly_dark", height=250, margin=dict(t=30,b=30))
         st.plotly_chart(fig_a, use_container_width=True)
 
-        # CÁLCULO DE INTERSECCIÓN CRÍTICA (Límite 5%)
+        # Gráfica B con buscador de intersección al 5%
         d_lim = 0
         for i in range(len(err)-1):
             if err[i] <= 5 <= err[i+1]:
                 d_lim = d_range[i] + (5 - err[i]) * (d_range[i+1]-d_range[i]) / (err[i+1]-err[i])
                 break
 
-        # --- GRÁFICA B: EVOLUCIÓN DEL ERROR ---
         fig_b = go.Figure()
-        fig_b.add_trace(go.Scatter(x=d_range, y=err, name="Error %", fill='tozeroy', 
-                                   line=dict(color='#ff007f', width=3), fillcolor='rgba(255, 0, 127, 0.2)'))
-        fig_b.add_hline(y=5, line_dash="dash", line_color="#ffff00", line_width=2)
-        
-        fig_b.add_trace(go.Scatter(x=[delta_user], y=[err_act], mode='markers', name='Error de Operación',
-                                   marker=dict(color='white', size=10, symbol='x')))
+        fig_b.add_trace(go.Scatter(x=d_range, y=err, name="Error %", fill='tozeroy', line=dict(color='#ff007f', width=3), fillcolor='rgba(255, 0, 127, 0.2)'))
+        fig_b.add_hline(y=5, line_dash="dash", line_color="#ffff00")
         
         if d_lim > 0:
-            fig_b.add_annotation(x=d_lim, y=5, text=f"Cruza 5% en δ ≈ {d_lim:.4f} m", showarrow=True, 
-                                   arrowhead=2, arrowcolor="#ffff00", bgcolor="#000000", font=dict(color="#ffff00"))
+            fig_b.add_annotation(x=d_lim, y=5, text=f"Cruce 5% en δ ≈ {d_lim:.4f} m", showarrow=True, arrowhead=2, arrowcolor="#ffff00", bgcolor="#000000", font=dict(color="#ffff00"))
 
-        fig_b.update_layout(title="Gráfica B: Evolución del Error Relativo (%) vs δ", template="plotly_dark", height=320,
-                              xaxis_title="Espesor δ [m]", yaxis_title="Error (%)")
+        fig_b.update_layout(title="Gráfica B", template="plotly_dark", height=250, margin=dict(t=30,b=30))
         st.plotly_chart(fig_b, use_container_width=True)
